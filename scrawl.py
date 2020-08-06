@@ -8,18 +8,12 @@ import cv2
 import pickle
 import pytesseract
 import numpy as np 
+from PIL import Image
 from keras.models import load_model
-
-# load the model
-model = load_model('models/handjob.h5')     # HTR Model trained with EMNIST dataset.
 
 # Import your tesseract executable here (eg: '/usr/bin/tesseract' for linux)
 pytesseract.pytesseract.tesseract_cmd = 'C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe'
 
-background = Image.open("out/bg.png")
-bgSize = background.width
-gap, _ = 0, 0 
-allowedChars = 'qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM,.-?!() 1234567890'
 
 def detection(handwriting_data):
     img = cv2.imread(handwriting_data) 
@@ -35,25 +29,26 @@ def detection(handwriting_data):
     contours, hierarchy = cv2.findContours(dilation, cv2.RETR_EXTERNAL, 
                                                     cv2.CHAIN_APPROX_NONE) 
     im2 = img.copy() 
-
-    i = 0 
-    os.mkdir('out')
+    i = 0
+    
+    if not (os.path.exists('font/')):
+        os.mkdir('font')
     for cnt in contours:
         x, y, w, h = cv2.boundingRect(cnt)
-        #rect = cv2.rectangle(im2, (x, y), (x + w, y + h), (0, 255, 0), 2)
         cropped = im2[y:y + h, x:x + w]
-        cv2.imwrite("out/"+str(i)+".png", cropped)
+        cv2.imwrite("font/"+str(i)+".png", cropped)
         i+=1
 
     print("[+] Identification completed.")
 
-def writeData():
+def writeData(char):
     global gap, _
     if char == '\n':
-        pass
+        gap = 25
+        _ += 200
     else:
         char.lower()
-        cases = Image.open("out/%s.png" % char)
+        cases = Image.open("font/%s.png" % char)
         background.paste(cases, (gap, _))
         size = cases.width
         gap += size
@@ -62,7 +57,7 @@ def writeData():
 def letterWrite(word):
     global gap, _
     if gap > bgSize - 95 * (len(word)):
-        gap = 0
+        gap = 25
         _ += 200
     for letter in word:
         if letter in allowedChars:
@@ -85,10 +80,12 @@ def letterWrite(word):
                 letter = 'braketcl'
             elif letter == '-':
                 letter = 'hiphen'
+            elif letter == '\n':
+                letter = '\n'
             writeData(letter)
         else:
-            print("[X] Character " + letter +" is not allowed.")
-            exit()
+            print("[x] Character " + letter + " is not allowed. Using newline instead.")
+            writeData('\n')
 
 # Splits the input to individual words and write
 def words(Input):
@@ -99,8 +96,8 @@ def words(Input):
 
 def recognize():
     # Iterating through each images, predicting and renaming
-    for imageName in os.listdir('out/'):
-        img_dir = 'out/'
+    for imageName in os.listdir('font/'):
+        img_dir = 'font/'
         print("Image name: " + img_dir + imageName)
         try:
             with open(os.path.abspath(os.path.join(os.getcwd(), "data/mapping.pkl"))) as f:
@@ -129,22 +126,23 @@ def recognize():
         if prediction.isupper():
             prediction = prediction.lower()
             prediction += 'upper'
-            os.rename(img_dir + imageName, img_dir + prediction + '.jpg')
+            os.rename(img_dir + imageName, img_dir + prediction + '.png')
         else:
-            os.rename(img_dir + imageName, img_dir + prediction + '.jpg')
+            os.rename(img_dir + imageName, img_dir + prediction + '.png')
 
-        print("[+] Recognition completed. Although the classifier may not have predicted the exact characters. Check the `out` directory and rename imgs if needed.")
-        wait = input("[!] Continue? (Y/n)")
-        if wait == "Y" or wait == "y" or wait == "":
-            writeText()
-        else:
-            print("Bye!")
+    print("[+] Recognition completed. Although the classifier may not have predicted the exact characters. Check the `font` directory and rename imgs if needed.")
+    print("[*] If any characters are not properly recognized, try again with a cleaner handwriting image.")
+    wait = input("[!] Continue? (Y/n) ")
+    if wait == "Y" or wait == "y" or wait == "":
+        return True
+    else:
+        return False
 
-def writeText(input_txt):
+def writeText(input_txt, background):
     try:
         with open(input_txt, 'r') as file:
             data = file.read().rstrip('\n')
-
+        #print("Text: "+ data)
         ln = len(data)
         nn = ln // 600
         chunks, chunk_size = ln, ln // (nn + 1)
@@ -153,31 +151,51 @@ def writeText(input_txt):
         for i in range(0, len(p)):
             words(p[i])
             writeData('\n')
-            background.save('%doutt.png' % i)
-            background1 = Image.open("out/bg.png")
+            background.save('output/page%d.png' % int(i+1))
+            background1 = Image.open("data/bg.png")
             background = background1
-            gap = 0
-            _ = 0
+            gap = 25
+            _ = 25
+
+        print("[+] Done. Written to 'output' directory.")
     except ValueError as err:
-        print("[X] {} - Try Again".format(err))
+        print("[x] {} - Try Again".format(err))
 
 if __name__ == '__main__':
     print("Scrawl Handwritten Project")
 
-    # TODO: parse arguments like input image, input text etc etc
+    # ~ alpha version ~
     # ! no convert to pdf as of now.!
     argParser = argparse.ArgumentParser(description="Convert text to handwritten images.")
-    argParser.add_argument('-hw', '--handwriting', action='store', dest='hw_data', required=True, help='Provide the alphabetical handwriting image with extension')
+    argParser.add_argument('-hw', '--handwriting', action='store', dest='hw_data', help='Provide the alphabetical handwriting image with extension')
     argParser.add_argument('-t', '--text', action='store', dest='input_txt', required=True, help='Provide the text to convert')
+    argParser.add_argument('--usetrained', action='store_true', dest='use_trained', help='Use already trained images')
     argParser.add_argument('--version', action='version', version='%(prog)s 0.1')
     userParams = argParser.parse_args()
 
-    # Perform handwriting countour detection and split each letters into separate images
-    detection(userParams.hw_data)
+    # load the model
+    model = load_model('models/handjob.h5')     # HTR Model trained with EMNIST dataset.
 
-    # Recognize each letters/images and rename the images accordingly
-    recognize()
+    background = Image.open("data/bg.png")
+    bgSize = background.width
+    gap, _ = 30, 30 
+    allowedChars = 'qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM,.-?!() 1234567890'
 
-    # Write the text using the recognized characters
-    writeText(userParams.input_txt)
-    
+    if not (os.path.exists('output/')):
+        os.mkdir('output')
+
+    if not (userParams.use_trained):
+        # Perform handwriting countour detection and split each letters into separate images
+        detection(userParams.hw_data)
+
+        # Recognize each letters/images and rename the images accordingly
+        done = recognize()
+
+        # Write the text using the recognized characters
+        if(done):
+            writeText(userParams.input_txt, background)
+        else:
+            print("Bye!")
+    else: 
+        print("[*] Using pre-trained images from 'font' directory")
+        writeText(userParams.input_txt, background)

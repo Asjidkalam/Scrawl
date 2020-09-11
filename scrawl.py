@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 import sys
 import argparse
 import cv2
@@ -126,9 +128,7 @@ def recognize():
         if prediction.isupper():
             prediction = prediction.lower()
             prediction += 'upper'
-            os.rename(img_dir + imageName, img_dir + prediction + '.png')
-        else:
-            os.rename(img_dir + imageName, img_dir + prediction + '.png')
+        os.rename(img_dir + imageName, img_dir + prediction + '.png')
 
     print("[+] Recognition completed. Although the classifier may not have predicted the exact characters. Check the `font` directory and rename imgs if needed.")
     print("[*] If any characters are not properly recognized, try again with a cleaner handwriting image.")
@@ -174,7 +174,7 @@ if __name__ == '__main__':
     userParams = argParser.parse_args()
 
     # load the model
-    model = load_model('models/handjob.h5')     # HTR Model trained with EMNIST dataset.
+    model = load_model('models/emnist-model.h5')     # HTR Model trained with EMNIST dataset.
 
     background = Image.open("data/bg.png")
     bgSize = background.width

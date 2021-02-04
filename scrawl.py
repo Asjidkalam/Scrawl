@@ -11,7 +11,7 @@ import pickle
 import pytesseract
 import numpy as np 
 from PIL import Image
-from keras.models import load_model
+from tensorflow.keras.models import load_model
 
 # Import your tesseract executable here (eg: '/usr/bin/tesseract' for linux)
 pytesseract.pytesseract.tesseract_cmd = 'C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe'

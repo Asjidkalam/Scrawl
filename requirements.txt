@@ -2,7 +2,7 @@ absl-py==0.11.0
 astor==0.7.1
 astunparse==1.6.3
 cachetools==4.2.1
-certifi==2020.12.5
+certifi==2022.12.7
 chardet==4.0.0
 editdistance==0.5.2
 flatbuffers==1.12
